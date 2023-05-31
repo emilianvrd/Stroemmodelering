@@ -2,24 +2,93 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 stromtilgang_land = []
+colors = [
+    "red",
+    "green",
+    "black",
+    "yellow",
+    "orange",
+    "pink",
+    "grey",
+    "violet",
+    "lime",
+    "purple",
+]
 
 
-def invalid_numbers(y, reached_max):
-    for i in range(len(y)):
-        if y[i] > 100:
+def filter_invalid_numbers(y):
+    # Vi vil ikke ekstrapolere over 100% eller under 0% eller få grafen til å synke
+    for i, val in enumerate(y):
+        if val > 100:
             y[i] = 100
-            reached_max = True
-        elif y[i] < 0:
+        if val < 0:
             y[i] = 0
-    if reached_max == True:
-        if y[i] < 100:
-            y[i] = 100
+        if i > 0:
+            if val < y[i - 1]:
+                y[i] = y[i - 1]
 
 
-def legge_til_nytt_land():
-    land = input("Hvilket land: ")
-    analyse_land = Regresjonsanalyse(land, [], 2)
-    analyse_land.plot("red")
+def load_data(path):
+    countries = {}
+    with open(path) as f:
+        count = 0
+        ar = None
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            count += 1
+            print(line, count)
+            if count == 3:
+                data = line.split(",")
+                for i in range(5):
+                    data.pop(0)
+                ar = [int(i.replace('"', "")) for i in data if i]
+                # Det er ett år for mye
+            if count > 4:
+                if ar is None:
+                    raise RuntimeError("Did not read heatherline")
+                country = CountryData(line, ar)
+                countries[country.name] = country
+    return countries
+
+
+class CountryData:
+    def __init__(self, line, ar):
+        data = line.split(",")
+        self.ar = ar
+        self.name = data[0].replace('"', "")
+        for i in range(5):
+            data.pop(0)
+        self.eldata = []
+        for i in data:
+            i = i.replace('"', "")
+            i = i.strip()
+            if i:
+                i = float(i)
+            else:
+                i = None
+            self.eldata.append(i)
+        self.eldata.pop(-1)
+
+        print(len(self.eldata), len(ar))
+        print(self.eldata[-4], ar[-4])
+
+    def plot(self, name, color):
+        ar = [self.ar[i] - 2000 for i in range(-24, -2)]
+        eldata = [self.eldata[i] for i in range(-24, -2)]
+        # filter out missing data
+        ny_ar = []
+        ny_eldata = []
+        for idx, val in enumerate(eldata):
+            if val is not None:
+                ny_ar.append(ar[idx])
+                ny_eldata.append(eldata[idx])
+
+        analyse = Regresjonsanalyse(name, ny_eldata, 2)
+        analyse.plot(color)
+        print(ny_ar, ny_eldata)
 
 
 class Regresjonsanalyse:
@@ -30,16 +99,10 @@ class Regresjonsanalyse:
 
     def plot(self, color):
         ar_etter_2000 = []
-        reached_max = False
         x = np.linspace(0, 40, 1000)
-        if len(self.stromtilgang) == 0:
-            for i in range(0, 24, 3):
-                ar_etter_2000.append(i)
-                print("Hvor mange prosent hadde strøm i år", 2000 + i, ":")
-                self.stromtilgang.append(float(input("Svar: ")))
-        elif len(self.stromtilgang) == 22:
-            for i in range(22):
-                ar_etter_2000.append(i)
+
+        for i in range(len(self.stromtilgang)):
+            ar_etter_2000.append(i)
         if self.grad == 1:
             a, b = np.polyfit(ar_etter_2000, self.stromtilgang, self.grad)
             y = a * x + b
@@ -53,74 +116,64 @@ class Regresjonsanalyse:
             print(
                 "Sorry, Vi klarte ikke å lage en graf som passer med kriteriene du oppga. Programmet fungerer bare opp til tredjegradsfunksjoner foreløpig"  # noqa: E501
             )
-        invalid_numbers(y, reached_max)
+        filter_invalid_numbers(y)
+        plt.xlabel("År etter 2000")
+        plt.ylabel("% andel med strømtilgang")
+        ax = plt.gca()
+        # ax.set_xlim([, xmax])
+        ax.set_ylim([0.0, 110])
         plt.plot(x, y, label=self.name, color=color)
 
 
-gjennomsnitt_i_verden = Regresjonsanalyse(
-    "Gjennomsnitt i verden",
-    [
-        78.4,
-        78.8,
-        79.2,
-        80.1,
-        80.1,
-        80.8,
-        81.5,
-        82.1,
-        82.8,
-        83.0,
-        83.6,
-        84.6,
-        85.1,
-        85.8,
-        86.3,
-        87.0,
-        88.2,
-        89.0,
-        89.9,
-        90.2,
-        90.5,
-        91.4,
-    ],
-    3,
-)
-gjennomsnitt_i_verden.plot("blue")
+def start():
+    antall_land = int(input("Hvor mange land vil du plotte?"))
+    if antall_land > 10:
+        print("Programmet blir for kaotisk med mer enn 10 grafer")
+        start()
+    for i in range(antall_land):
+        while True:
+            name = input("Skriv et land du vil du plotte?")
+            if name in countries:
+                countries[name].plot(name, colors[i])
+                break
+            else:
+                print("Finner ikke landet, prøv igen")
 
-Kenya = Regresjonsanalyse(
-    "Kenya",
-    [
-        15.2,
-        17,
-        18.9,
-        16,
-        22.6,
-        24.5,
-        26.4,
-        28.3,
-        30.2,
-        23,
-        19.2,
-        36.2,
-        38.1,
-        40.1,
-        36,
-        41.6,
-        53.1,
-        55.8,
-        61.2,
-        69.7,
-        71.5,
-        76.5,
-    ],
-    2,
-)
-Kenya.plot("yellow")
 
-nytt_land = input("Vil du legge til et nytt land?")
+if __name__ == "__main__":
+    countries = load_data("Data.csv")
+    print(countries.keys())
+    start()
 
-if nytt_land == "Ja":
-    legge_til_nytt_land()
+    gjennomsnitt_i_verden = Regresjonsanalyse(
+        "Gjennomsnitt i verden",
+        [
+            78.4,
+            78.8,
+            79.2,
+            80.1,
+            80.1,
+            80.8,
+            81.5,
+            82.1,
+            82.8,
+            83.0,
+            83.6,
+            84.6,
+            85.1,
+            85.8,
+            86.3,
+            87.0,
+            88.2,
+            89.0,
+            89.9,
+            90.2,
+            90.5,
+            91.4,
+        ],
+        3,
+    )
+    gjennomsnitt_i_verden.plot("blue")
 
-plt.legend()
-plt.show()
+    plt.legend()
+    plt.show()
